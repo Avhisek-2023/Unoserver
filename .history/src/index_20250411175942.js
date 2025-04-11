@@ -74,7 +74,6 @@ io.on("connection", (socket) => {
         shuffledDeck.push(card);
       }
     }
-    console.log(playCards, firstCard);
 
     socket.emit("shuffled_card", playCards);
 

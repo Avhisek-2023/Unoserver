@@ -74,7 +74,6 @@ io.on("connection", (socket) => {
         shuffledDeck.push(card);
       }
     }
-    console.log(playCards, firstCard);
 
     socket.emit("shuffled_card", playCards);
 
@@ -87,6 +86,16 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
+    // Clean up
+    const index = players.findIndex((p) => p.id === socket.id);
+    if (index !== -1) players.splice(index, 1);
+
+    if (players.length < 4) {
+      gameStarted = false;
+      playCards = {};
+      firstCard = null;
+      console.log("Game reset due to player disconnect");
+    }
   });
 });
 httpServer.listen(PORT, () => {

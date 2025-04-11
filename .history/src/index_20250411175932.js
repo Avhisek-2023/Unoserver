@@ -74,7 +74,6 @@ io.on("connection", (socket) => {
         shuffledDeck.push(card);
       }
     }
-    console.log(playCards, firstCard);
 
     socket.emit("shuffled_card", playCards);
 
@@ -85,8 +84,9 @@ io.on("connection", (socket) => {
     console.log(`Message from ${socket.id}: ${msg}`);
   });
 
+ 
   socket.on("disconnect", (reason) => {
-    console.log(`socket ${socket.id} disconnected due to ${reason}`);
+    console.log(socket ${socket.id} disconnected due to ${reason});
   });
 });
 httpServer.listen(PORT, () => {

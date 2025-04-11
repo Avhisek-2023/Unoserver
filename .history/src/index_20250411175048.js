@@ -39,56 +39,43 @@ for (let i = 0; i < 4; i++) {
   });
 }
 
+const shuffledDeck = shuffle(unoDeck);
+
+// const playersCards = shuffledDeck.splice(0, 48);
+// const remainingDeck = shuffledDeck;
+// console.log(playersCards.length, remainingDeck.length);
 const players = [];
 
 const cardCount = 12;
 
-let gameStarted = false;
-let playCards = {};
-let firstCard = null;
-
 io.on("connection", (socket) => {
   players.push({ id: socket.id });
   console.log(`socket ${socket.id} connected`);
-  console.log(`Players connected: ${players.length}`);
-
-  socket.emit("send", "Welcome to the UNO game!");
-
-  if (players.length === 4 && !gameStarted) {
-    gameStarted = true;
-
-    const shuffledDeck = shuffle([...unoDeck]);
-
-    playCards = {};
+  console.log(io.engine.clientsCount);
+  const playCards = {};
+  if (players.length === 4) {
     players.forEach((player) => {
-      const hand = shuffledDeck.splice(0, cardCount);
+      const hand = unoDeck.splice(0, cardCount);
       playCards[player.id] = hand;
     });
-
-    while (shuffledDeck.length > 0) {
-      const card = shuffledDeck.shift();
-      if (card.type === "number") {
-        firstCard = card;
-        break;
-      } else {
-        shuffledDeck.push(card);
-      }
-    }
-    console.log(playCards, firstCard);
-
-    socket.emit("shuffled_card", playCards);
-
-    socket.emit("first_card", firstCard);
+    while (unoDeck[0].type !== "number") {}
   }
 
+  socket.emit("send", "hello msg");
+
+  socket.emit("shuffled_card", playCards);
+
+  socket.emit("first_card");
+
   socket.on("message", (msg) => {
-    console.log(`Message from ${socket.id}: ${msg}`);
+    console.log(msg);
   });
 
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
   });
 });
+
 httpServer.listen(PORT, () => {
   console.log(`Server running on port: http://localhost:${PORT}`);
 });

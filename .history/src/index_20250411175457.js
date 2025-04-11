@@ -39,6 +39,11 @@ for (let i = 0; i < 4; i++) {
   });
 }
 
+const shuffledDeck = shuffle(unoDeck);
+
+// const playersCards = shuffledDeck.splice(0, 48);
+// const remainingDeck = shuffledDeck;
+// console.log(playersCards.length, remainingDeck.length);
 const players = [];
 
 const cardCount = 12;
@@ -54,31 +59,38 @@ io.on("connection", (socket) => {
 
   socket.emit("send", "Welcome to the UNO game!");
 
+  // Only start when 4 players are connected and the game hasn't started yet
   if (players.length === 4 && !gameStarted) {
     gameStarted = true;
 
+    // Shuffle a fresh deck
     const shuffledDeck = shuffle([...unoDeck]);
 
+    // Distribute cards
     playCards = {};
     players.forEach((player) => {
       const hand = shuffledDeck.splice(0, cardCount);
       playCards[player.id] = hand;
     });
 
+    // Select the first playable card (must be a number card)
     while (shuffledDeck.length > 0) {
       const card = shuffledDeck.shift();
       if (card.type === "number") {
         firstCard = card;
         break;
       } else {
-        shuffledDeck.push(card);
+        shuffledDeck.push(card); // Rotate to end
       }
     }
-    console.log(playCards, firstCard);
 
-    socket.emit("shuffled_card", playCards);
+    // Broadcast card hands and first card to all players
+    players.forEach((player) => {
+      const socketId = player.id;
+      io.to(socketId).emit("shuffled_card", playCards[socketId]);
+    });
 
-    socket.emit("first_card", firstCard);
+    io.emit("first_card", firstCard);
   }
 
   socket.on("message", (msg) => {
@@ -87,6 +99,16 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", (reason) => {
     console.log(`socket ${socket.id} disconnected due to ${reason}`);
+    // Clean up
+    const index = players.findIndex((p) => p.id === socket.id);
+    if (index !== -1) players.splice(index, 1);
+
+    if (players.length < 4) {
+      gameStarted = false;
+      playCards = {};
+      firstCard = null;
+      console.log("Game reset due to player disconnect");
+    }
   });
 });
 httpServer.listen(PORT, () => {
