@@ -13,6 +13,7 @@ const io = new Server(server, {
 
 const players = [];
 const cardCount = 12;
+const playerCard = {};
 let playerData = {};
 let firstCard = null;
 let currentTurnIndex = 0;
@@ -41,6 +42,7 @@ const nextTurn = () => {
 io.on("connection", (socket) => {
   console.log(`Player connected: ${socket.id}`);
   players.push({ id: socket.id });
+  playerCard[socket.id] = 12;
 
   if (players.length === 4) {
     players.forEach((player) => {
@@ -60,8 +62,9 @@ io.on("connection", (socket) => {
         unoDeck.push(card);
       }
     }
-
+    io.emit("card_count", playerCard);
     io.emit("first_card", firstCard);
+
     nextTurn();
   }
 
@@ -79,8 +82,8 @@ io.on("connection", (socket) => {
     hand.splice(index, 1);
     lastCardPlayed = cardPlayed;
 
+    playerCard[playerId] = playerCard[playerId] - 1;
     io.emit("card_played", { playerId, card: cardPlayed });
-
     currentTurnIndex = (currentTurnIndex + 1) % players.length;
     nextTurn();
   });
