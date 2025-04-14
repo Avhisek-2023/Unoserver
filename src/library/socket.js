@@ -84,6 +84,7 @@ io.on("connection", (socket) => {
 
     playerCard[playerId] = playerCard[playerId] - 1;
     io.emit("card_played", { playerId, card: cardPlayed });
+    io.emit("card_count", playerCard);
     currentTurnIndex = (currentTurnIndex + 1) % players.length;
     nextTurn();
   });
