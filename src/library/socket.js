@@ -26,7 +26,9 @@ const nextTurn = () => {
 
   const playableCards = currentHand.filter((card) => {
     return (
-      card.color === lastCardPlayed.color || card.value === lastCardPlayed.value
+      card.color === lastCardPlayed.color ||
+      card.value === lastCardPlayed.value ||
+      card.type === "wild"
     );
   });
 
@@ -64,7 +66,6 @@ io.on("connection", (socket) => {
     }
     io.emit("card_count", playerCard);
     io.emit("first_card", firstCard);
-
     nextTurn();
   }
 
@@ -72,21 +73,117 @@ io.on("connection", (socket) => {
     const playerId = socket.id;
     const hand = playerData[playerId].hand;
 
-    const index = hand.findIndex(
-      (card) =>
-        card.color === cardPlayed.color && card.value === cardPlayed.value
-    );
+    const index = hand.findIndex((card) => {
+      if (card.type === "wild" || card.type === "wild draw4") {
+        return card.type === cardPlayed.type && card.value === cardPlayed.value;
+      }
+      return (
+        card.color === cardPlayed.color &&
+        card.value === cardPlayed.value &&
+        card.type === cardPlayed.type
+      );
+    });
 
     if (index === -1) return;
 
     hand.splice(index, 1);
     lastCardPlayed = cardPlayed;
+    playerCard[playerId]--;
 
-    playerCard[playerId] = playerCard[playerId] - 1;
     io.emit("card_played", { playerId, card: cardPlayed });
     io.emit("card_count", playerCard);
-    currentTurnIndex = (currentTurnIndex + 1) % players.length;
+
+    const nextPlayerIndex = (currentTurnIndex + 1) % players.length;
+    const nextPlayer = players[nextPlayerIndex];
+    const nextPlayerId = nextPlayer.id;
+
+    switch (cardPlayed.value) {
+      case "skip":
+        currentTurnIndex = (currentTurnIndex + 2) % players.length;
+        break;
+      case "reverse":
+        players.reverse();
+        currentTurnIndex = (players.length - currentTurnIndex) % players.length;
+        break;
+      case "draw2":
+        if (unoDeck.length >= 2) {
+          const drawTwo = unoDeck.splice(0, 2);
+          playerData[nextPlayerId].hand.push(...drawTwo);
+          playerCard[nextPlayerId] += 2;
+          io.to(nextPlayerId).emit("draw_card", drawTwo);
+        }
+        currentTurnIndex = (currentTurnIndex + 2) % players.length;
+        break;
+      case "wild draw4":
+        if (unoDeck.length >= 4) {
+          const drawFour = unoDeck.splice(0, 4);
+          playerData[nextPlayerId].hand.push(...drawFour);
+          playerCard[nextPlayerId] += 4;
+          io.to(nextPlayerId).emit("draw_card", drawFour);
+        }
+        currentTurnIndex = (currentTurnIndex + 2) % players.length;
+        break;
+      case "wild":
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+        break;
+      default:
+        currentTurnIndex = (currentTurnIndex + 1) % players.length;
+    }
+
     nextTurn();
+  });
+
+  socket.on("set_color", ({ card, color }) => {
+    if (card.type !== "wild") return;
+
+    const playerId = socket.id;
+    const hand = playerData[playerId].hand;
+
+    const index = hand.findIndex(
+      (c) => c.type === card.type && c.value === card.value
+    );
+
+    if (index === -1) return;
+
+    hand.splice(index, 1);
+    card.color = color;
+    lastCardPlayed = card;
+    playerCard[playerId]--;
+
+    io.emit("card_played", { playerId, card });
+    io.emit("card_count", playerCard);
+
+    const nextPlayerIndex = (currentTurnIndex + 1) % players.length;
+    const nextPlayerId = players[nextPlayerIndex].id;
+
+    if (card.value === "wild draw4") {
+      const drawFour = unoDeck.splice(0, 4);
+      playerData[nextPlayerId].hand.push(...drawFour);
+      playerCard[nextPlayerId] += 4;
+      io.to(nextPlayerId).emit("draw_card", drawFour);
+      currentTurnIndex = (currentTurnIndex + 2) % players.length;
+    } else {
+      currentTurnIndex = (currentTurnIndex + 1) % players.length;
+    }
+
+    nextTurn();
+  });
+
+  socket.on("take_card", () => {
+    const playerId = socket.id;
+
+    if (!playerData[playerId]) return;
+
+    const draw = unoDeck.splice(0, 1);
+
+    if (draw.length > 0) {
+      playerData[playerId].hand.push(...draw);
+      playerCard[playerId]++;
+      io.to(playerId).emit("draw_card", draw);
+      io.emit("card_count", playerCard);
+      currentTurnIndex = (currentTurnIndex + 1) % players.length;
+      nextTurn();
+    }
   });
 
   socket.on("disconnect", () => {
