@@ -7,7 +7,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173"],
+    origin: ["http://localhost:4173"],
   },
 });
 
@@ -90,6 +90,28 @@ io.on("connection", (socket) => {
     lastCardPlayed = cardPlayed;
     playerCard[playerId]--;
 
+    if (hand.length === 1) {
+      playerData[playerId].announcedUNO = false;
+      playerData[playerId].pendingUNOCheck = true;
+
+      setTimeout(() => {
+        if (
+          !playerData[playerId].announcedUNO &&
+          playerData[playerId].pendingUNOCheck
+        ) {
+          const penaltyCards = unoDeck.splice(0, 2);
+          hand.push(...penaltyCards);
+          playerCard[playerId] += 2;
+          playerData[playerId].pendingUNOCheck = false;
+          io.to(playerId).emit("draw_card", penaltyCards);
+          io.to(gameId).emit("uno_penalty", {
+            playerId,
+            newHand: hand,
+          });
+        }
+      }, 5000);
+    }
+
     io.emit("card_played", { playerId, card: cardPlayed });
     io.emit("card_count", playerCard);
 
@@ -110,7 +132,10 @@ io.on("connection", (socket) => {
           const drawTwo = unoDeck.splice(0, 2);
           playerData[nextPlayerId].hand.push(...drawTwo);
           playerCard[nextPlayerId] += 2;
-          io.to(nextPlayerId).emit("draw_card", drawTwo);
+          io.to(nextPlayerId).emit("draw_card", {
+            newHand: playerData[nextPlayerId].hand,
+            drawnCards: drawTwo,
+          });
         }
         currentTurnIndex = (currentTurnIndex + 2) % players.length;
         break;
@@ -119,7 +144,10 @@ io.on("connection", (socket) => {
           const drawFour = unoDeck.splice(0, 4);
           playerData[nextPlayerId].hand.push(...drawFour);
           playerCard[nextPlayerId] += 4;
-          io.to(nextPlayerId).emit("draw_card", drawFour);
+          io.to(nextPlayerId).emit("draw_card", {
+            newHand: playerData[nextPlayerId].hand,
+            drawnCards: drawFour,
+          });
         }
         currentTurnIndex = (currentTurnIndex + 2) % players.length;
         break;
@@ -131,6 +159,15 @@ io.on("connection", (socket) => {
     }
 
     nextTurn();
+  });
+
+  socket.on("hit_uno", () => {
+    const playerId = socket.id;
+    if (playerData[playerId].hand.length === 1) {
+      playerData[playerId].announcedUNO = true;
+      playerData[playerId].pendingUNOCheck = false;
+      io.emit("uno_called", { playerId });
+    }
   });
 
   socket.on("set_color", ({ card, color }) => {
@@ -179,7 +216,10 @@ io.on("connection", (socket) => {
     if (draw.length > 0) {
       playerData[playerId].hand.push(...draw);
       playerCard[playerId]++;
-      io.to(playerId).emit("draw_card", draw);
+      io.to(playerId).emit("draw_card", {
+        newHand: playerData[playerId].hand,
+        drawnCards: draw,
+      });
       io.emit("card_count", playerCard);
       currentTurnIndex = (currentTurnIndex + 1) % players.length;
       nextTurn();
